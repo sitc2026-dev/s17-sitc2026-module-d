@@ -1,5 +1,5 @@
 {
-  "name": "",
+  "name": "SITC2026 S17 - Module D",
   "displayName": "",
   "description": "",
   "url": "",
@@ -9,12 +9,12 @@
   "languages": [
     "EN"
   ],
-  "competition": "",
+  "competition": "Skills IT Training Camp 2026",
   "estTime": 3,
   "authors": [
     {
-      "name": "",
-      "url": ""
+      "name": "Zoltan Sisak",
+      "url": "https://www.linkedin.com/in/zoltan-sisak/"
     }
   ],
   "technologies": [],
