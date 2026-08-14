@@ -1,0 +1,1533 @@
+﻿openapi: 3.0.3
+info:
+  title: SwapLoop Main Backend API
+  description: |
+    Authoritative OpenAPI for **SITC 2026 Skill 17 — Module C — SwapLoop Main Backend**.
+
+    Base path is `/api/v1`.
+
+    **Auth model:** opaque bearer tokens stored on `users.api_token` (no sessions table).
+    Login/register return `{ "token": "..." }` only. Protected routes require
+    `Authorization: Bearer <token>`. Suspended accounts cannot log in and cannot call
+    protected endpoints.
+  version: 0.1.0
+  contact:
+    name: SwapLoop — Module C solution
+
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Local author / Bruno testing
+  - url: http://localhost:5001/api/v1
+    description: Default agent/dev fallback
+  - url: "{baseUrl}"
+    description: Custom base URL
+    variables:
+      baseUrl:
+        default: http://localhost:5000/api/v1
+
+tags:
+  - name: Health
+    description: Liveness
+  - name: Auth
+    description: Login and registration
+  - name: Rider
+    description: Authenticated rider profile
+  - name: Stations
+    description: Public station discovery
+  - name: Services
+    description: Unified swap and charging service lifecycle
+  - name: Batteries
+    description: Last-charge telemetry evaluation and quarantine
+  - name: Billing
+    description: Pay-as-you-go price catalog (Alipay debit TBD)
+  - name: Admin
+    description: Assessor / reset utilities
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Public liveness probe.
+      security: []
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusOk"
+              example:
+                status: ok
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in
+      description: |
+        Verifies email + password against bcrypt `password_hash`.
+        Returns the user's opaque `api_token`. Suspended accounts receive `403`.
+      security: []
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: lin.xiaoyu@swaploop.test
+              password: password123
+      responses:
+        "200":
+          description: Login succeeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+              example:
+                token: sl_tok_rider-001
+        "401":
+          description: Unknown user or invalid password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: UNAUTHORIZED
+                message: Invalid email or password.
+        "403":
+          description: Account is suspended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: FORBIDDEN
+                message: This account is suspended.
+        "422":
+          description: Missing email or password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: VALIDATION_ERROR
+                message: Email and password are required.
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register rider
+      description: |
+        Creates a self-service `RIDER` account (`ACTIVE`) with a mode-driven vehicle profile.
+        - `SWAPPABLE`: require `batteryType` (`SL-48` | `SL-60`); omit `connectorType`
+        - `INTEGRATED`: require `connectorType` (`GB-AC-48` | `GB-AC-60`); omit `batteryType`
+        Voltage is derived from the chosen type. Returns a new opaque bearer token.
+        Fleet/delivery accounts are not created through this endpoint.
+      security: []
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            examples:
+              swappable:
+                summary: Swappable battery bike
+                value:
+                  email: new.rider@swaploop.test
+                  password: password123
+                  displayName: New Rider
+                  batteryMode: SWAPPABLE
+                  batteryType: SL-48
+              integrated:
+                summary: Integrated battery bike
+                value:
+                  email: charge.rider@swaploop.test
+                  password: password123
+                  displayName: Charge Rider
+                  batteryMode: INTEGRATED
+                  connectorType: GB-AC-48
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+              example:
+                token: sl_tok_rider-85d2c034
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: CONFLICT
+                message: An account with this email already exists.
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /me:
+    get:
+      tags: [Rider]
+      summary: Current user profile
+      description: |
+        Returns the authenticated rider/staff public profile.
+        Suspended tokens are rejected with `403`.
+      operationId: getMe
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUser"
+              example:
+                id: rider-001
+                email: lin.xiaoyu@swaploop.test
+                displayName: Lin Xiaoyu
+                role: RIDER
+                status: ACTIVE
+                batteryMode: SWAPPABLE
+                batteryType: SL-48
+                connectorType: null
+                voltageClass: 48V
+                partnerId: null
+        "401":
+          description: Missing or unknown bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: UNAUTHORIZED
+                message: Missing or malformed bearer token.
+        "403":
+          description: Suspended account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: FORBIDDEN
+                message: This account is suspended.
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    patch:
+      tags: [Rider]
+      summary: Update current user profile
+      description: |
+        Partially updates the authenticated rider profile.
+        - `displayName` optional
+        - vehicle fields use the same mode-driven rules as register:
+          - `SWAPPABLE` requires `batteryType`; omit `connectorType`
+          - `INTEGRATED` requires `connectorType`; omit `batteryType`
+        At least one of displayName or vehicle profile must be provided.
+        Returns the updated public profile. Suspended tokens receive `403`.
+      operationId: updateMe
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+            examples:
+              displayNameOnly:
+                value:
+                  displayName: Lin X.
+              switchToIntegrated:
+                value:
+                  batteryMode: INTEGRATED
+                  connectorType: GB-AC-48
+              switchToSwappable:
+                value:
+                  displayName: Lin Xiaoyu
+                  batteryMode: SWAPPABLE
+                  batteryType: SL-60
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUser"
+        "401":
+          description: Missing or unknown bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Suspended account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /me/activity:
+    get:
+      tags: [Rider]
+      summary: Active and recent services for the rider
+      description: |
+        Returns the rider's current active service (or null) and up to 5 recent
+        terminal-state services (CONFIRMED, COLLECTED, EXPIRED, CANCELLED, SAFETY_CUTOFF).
+      operationId: getMyActivity
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Activity snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityResponse"
+        "401":
+          description: Missing or unknown bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Suspended account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /stations:
+    get:
+      tags: [Stations]
+      summary: List stations
+      description: |
+        Public station list. Suspended stations remain discoverable unless an
+        availability / compatibility filter is applied (`service` + optional
+        `batteryType` / `connectorType` / `voltageClass`).
+
+        Nearby filtering: provide both `lat` and `lng`. Optional `radiusMeters`
+        defaults to `1500`. Matching results include `distanceMeters` and are
+        sorted nearest-first.
+
+        Compatibility filter uses the solution vehicle model:
+        - `service=SWAP` + optional `batteryType` (`SL-48` | `SL-60`)
+        - `service=BIKE_BAY` + optional `connectorType` (`GB-AC-48` | `GB-AC-60`)
+        Only ACTIVE stations with currently reservable capacity match.
+
+        Optional bearer token: when present, each station includes
+        `riderAvailability` for the caller's vehicle profile
+        (`compatibleReadyBattery`, `compatibleChargingBay`).
+      security: []
+      operationId: listStations
+      parameters:
+        - name: lat
+          in: query
+          schema: { type: number, format: double, example: 31.2308 }
+        - name: lng
+          in: query
+          schema: { type: number, format: double, example: 121.4717 }
+        - name: radiusMeters
+          in: query
+          schema: { type: integer, example: 1500 }
+        - name: type
+          in: query
+          schema:
+            $ref: "#/components/schemas/StationType"
+        - name: service
+          in: query
+          description: Compatibility / availability filter
+          schema:
+            type: string
+            enum: [SWAP, BIKE_BAY]
+        - name: batteryType
+          in: query
+          description: Required pairing with service=SWAP when filtering by pack class
+          schema:
+            $ref: "#/components/schemas/BatteryType"
+        - name: connectorType
+          in: query
+          description: Required pairing with service=BIKE_BAY when filtering by bay connector
+          schema:
+            $ref: "#/components/schemas/ConnectorType"
+        - name: voltageClass
+          in: query
+          schema:
+            $ref: "#/components/schemas/VoltageClass"
+      responses:
+        "200":
+          description: Station list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [stations]
+                additionalProperties: false
+                properties:
+                  stations:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/StationSummary"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /stations/{stationId}:
+    get:
+      tags: [Stations]
+      summary: Station detail
+      description: |
+        Public station detail. Returns the StationSummary fields plus a
+        `compatibility` object derived from the station type and its units:
+        - `services` from station type (`SWAP` / `BIKE_BAY`)
+        - `batteryTypes` from swap-bay units
+        - `connectorTypes` from bike-bay units
+        - `voltageClasses` derived from those types
+        Suspended stations remain fetchable.
+
+        Optional bearer token: when present, response includes
+        `riderAvailability` for the caller's vehicle profile:
+        - `compatibleReadyBattery` — READY swap slot matching rider `batteryType`
+        - `compatibleChargingBay` — AVAILABLE bike bay matching rider `connectorType`
+      security: []
+      operationId: getStation
+      parameters:
+        - name: stationId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: station-001
+      responses:
+        "200":
+          description: Station detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationDetail"
+        "404":
+          description: Unknown station id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: NOT_FOUND
+                message: Station not found.
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /services:
+    post:
+      tags: [Services]
+      summary: Create a swap or charging service hold
+      description: |
+        Authenticated riders only. Body requires `type` (`SWAP` | `CHARGING`) and `stationId`.
+        Atomically reserves a matching bay for 10 seconds (competition / marking duration;
+        a production hold would typically be 15–30 minutes). One active service per rider.
+
+        **Swap safety:** before holding a READY pack, Main Backend fetches last charging-event
+        telemetry from Station Service and applies spike (`temperature > 55`) / sustained
+        (≥5-minute mean `temperature > 50`) rules. Unsafe packs are quarantined (`QUARANTINED`)
+        and the next compatible READY pack is tried. Missing telemetry skips that pack.
+        `409 CONFLICT` only when no remaining pack can be reserved.
+
+        Lifecycle transitions (owner-only, state-based idempotent):
+        - SWAP: `POST /services/{id}/start` (`RESERVED`→`STARTED`), `/confirm` (`STARTED`→`CONFIRMED`), `/cancel`
+        - CHARGING: `/start` starts Station Service bike-bay session then `RESERVED`→`CHARGING`;
+          poll `GET /services/{id}/charging-status` (auto `READY_FOR_COLLECTION` on complete);
+          `/collect`; optional `/ready` fallback; `/cancel` from `RESERVED` only
+      operationId: createService
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceRequest"
+            examples:
+              swap:
+                value:
+                  type: SWAP
+                  stationId: station-001
+              charging:
+                value:
+                  type: CHARGING
+                  stationId: station-001
+      responses:
+        "201":
+          description: Service created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+        "401":
+          description: Missing / invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Suspended account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Station not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: |
+            No capacity, station suspended, rider already has an active service,
+            or selected swap battery failed last-charge safety / has no usable telemetry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Validation failed / wrong vehicle profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /batteries/{batteryId}/evaluate-last-charge:
+    post:
+      tags: [Batteries]
+      summary: Evaluate last charging telemetry and quarantine if unsafe
+      description: |
+        Authenticated. Fetches Station Service `GET /api/batteries/{batteryId}/last-charging-telemetry`,
+        evaluates spike / sustained rules, and sets the holding SWAP_BAY to `QUARANTINED` when unsafe.
+
+        Requires Station Service (`STATION_SERVICE_BASE_URL`, default `http://localhost:4020`).
+      operationId: evaluateBatteryLastCharge
+      parameters:
+        - name: batteryId
+          in: path
+          required: true
+          schema: { type: string }
+          example: battery-001
+      responses:
+        "200":
+          description: Evaluation completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvaluateLastChargeResponse"
+              examples:
+                safe:
+                  value:
+                    batteryId: battery-001
+                    outcome: SAFE
+                    unitId: unit-001
+                spike:
+                  value:
+                    batteryId: battery-005
+                    outcome: QUARANTINED
+                    reason: SPIKE
+                    unitId: unit-009
+                sustained:
+                  value:
+                    batteryId: battery-007
+                    outcome: QUARANTINED
+                    reason: SUSTAINED
+                    unitId: unit-014
+        "401":
+          description: Missing / invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Suspended account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Unknown battery or known battery with no telemetry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                notFound:
+                  value:
+                    code: NOT_FOUND
+                    message: Battery 'battery-unknown' was not found in Station Service.
+                noTelemetry:
+                  value:
+                    code: NO_TELEMETRY
+                    message: No completed charging telemetry stored for battery 'battery-002'.
+        "422":
+          description: Invalid batteryId
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Station Service unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: STATION_SERVICE_UNAVAILABLE
+                message: Unable to reach Station Service for last charging telemetry.
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /services/{serviceId}:
+    get:
+      tags: [Services]
+      summary: Get own service by id
+      operationId: getService
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+        "401":
+          description: Missing / invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Not the service owner (or suspended)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Unknown service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /services/{serviceId}/start:
+    post:
+      tags: [Services]
+      summary: Start a reserved service
+      description: |
+        Owner-only. SWAP: `RESERVED`→`STARTED` (sets `startedAt`; unit stays reserved).
+        CHARGING: starts a Station Service bike-bay charging session (~15s), then
+        `RESERVED`→`CHARGING` (unit `RESERVED`→`CHARGING`). If Station Service fails,
+        the hold stays `RESERVED` and the API returns `502` / `409`.
+        Idempotent when already started. Expired holds are expired then rejected with `409`.
+      operationId: startService
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Service after start (or already started)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+        "401":
+          description: Missing / invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Not the service owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Unknown service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Illegal state / expired hold / bay session conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Station Service unavailable (charging start)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: STATION_SERVICE_UNAVAILABLE
+                message: Unable to reach Station Service to start charging.
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /services/{serviceId}/charging-status:
+    get:
+      tags: [Services]
+      summary: Poll live bike-bay charging progress
+      description: |
+        Owner-only. Allowed while service is `CHARGING` or `READY_FOR_COLLECTION`.
+        Proxies the Station Service bike-bay session. When Station Service reports
+        `COMPLETED` and the service is still `CHARGING`, Main Backend auto-transitions
+        to `READY_FOR_COLLECTION` (unit follows). Happy-path SPA uses this poll instead
+        of `POST /ready`.
+      operationId: getServiceChargingStatus
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Service plus live charging telemetry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceChargingStatusResponse"
+        "401":
+          description: Missing / invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Not the service owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Unknown service or no Station Service session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Wrong type or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Station Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /services/{serviceId}/confirm:
+    post:
+      tags: [Services]
+      summary: Confirm a started swap
+      description: |
+        Owner-only. SWAP only: `STARTED`→`CONFIRMED`. Exchanges inventory:
+        rider's `currentBatteryId` becomes the bay pack (`batteryOutId`); the bay
+        goes `CHARGING` holding the returned pack (`batteryInId`). Snapshots PAYG
+        `priceYuan` / `priceCode` from `price_list`. Confirm from
+        `RESERVED` without start → `409`. CHARGING → `409` (use `/collect`).
+        Idempotent when already `CONFIRMED`.
+      operationId: confirmSwapService
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Confirmed swap service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+        "401":
+          description: Missing / invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Not the service owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Unknown service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Illegal type or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /services/{serviceId}/ready:
+    post:
+      tags: [Services]
+      summary: Mark charging ready for collection (fallback)
+      description: |
+        Owner-only. CHARGING only: `CHARGING`→`READY_FOR_COLLECTION`
+        (unit follows). Idempotent when already ready. SWAP → `409`.
+        Happy path prefers auto-ready via `GET /charging-status` when Station Service
+        completes; this endpoint remains as an assessor / offline fallback.
+      operationId: markChargingReady
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Charging service ready for collection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+        "401":
+          description: Missing / invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Not the service owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Unknown service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Illegal type or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /services/{serviceId}/collect:
+    post:
+      tags: [Services]
+      summary: Collect bike after charging
+      description: |
+        Owner-only. CHARGING only: `READY_FOR_COLLECTION`→`COLLECTED`,
+        unit → `AVAILABLE`. Snapshots PAYG `priceYuan` / `priceCode` from `price_list`.
+        Best-effort clears the Station Service bike-bay session.
+        Collect before ready → `409`. Idempotent when already `COLLECTED`.
+      operationId: collectChargingService
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Collected charging service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+        "401":
+          description: Missing / invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Not the service owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Unknown service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Illegal type or state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /services/{serviceId}/cancel:
+    post:
+      tags: [Services]
+      summary: Cancel a service hold
+      description: |
+        Owner-only. SWAP: cancel from `RESERVED` or `STARTED` → `CANCELLED`, release bay.
+        CHARGING: cancel from `RESERVED` only → `CANCELLED`, release bay.
+        Cancel after charging start → `409`. Idempotent when already `CANCELLED`.
+      operationId: cancelService
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Cancelled service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+        "401":
+          description: Missing / invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Not the service owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Unknown service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Illegal state / expired hold
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /price-list:
+    get:
+      tags: [Billing]
+      summary: List active pay-as-you-go prices
+      description: |
+        Public catalog of current `price_list` rows (whole CNY). Used for transparency;
+        authoritative charge amount is still snapshotted onto the service at confirm/collect.
+      security: []
+      operationId: listPriceList
+      responses:
+        "200":
+          description: Active price catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [currency, items]
+                additionalProperties: false
+                properties:
+                  currency:
+                    type: string
+                    enum: [CNY]
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - priceCode
+                        - serviceType
+                        - batteryType
+                        - connectorType
+                        - amountYuan
+                      additionalProperties: false
+                      properties:
+                        priceCode: { type: string, example: SWAP_SL-48 }
+                        serviceType:
+                          type: string
+                          enum: [SWAP, CHARGING]
+                        batteryType:
+                          type: string
+                          nullable: true
+                        connectorType:
+                          type: string
+                          nullable: true
+                        amountYuan:
+                          type: integer
+                          example: 5
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /reset:
+    post:
+      tags: [Admin]
+      summary: Reset database from dump
+      description: |
+        Public endpoint. Reloads `db/swaploop_db.sql` into the configured `DB_NAME`.
+        No bearer token required.
+      security: []
+      operationId: resetDatabase
+      responses:
+        "200":
+          description: Database restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusOk"
+              example:
+                status: ok
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: |
+        Opaque token from login/register (`users.api_token`).
+        Example: `Authorization: Bearer sl_tok_rider-001`
+
+  responses:
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: INTERNAL_ERROR
+            message: Unable to process the request.
+
+  schemas:
+    StatusOk:
+      type: object
+      required: [status]
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    TokenResponse:
+      type: object
+      required: [token]
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+          description: Opaque bearer token for Authorization header
+          example: sl_tok_rider-001
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 1
+
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - displayName
+        - batteryMode
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        displayName:
+          type: string
+          minLength: 1
+        batteryMode:
+          $ref: "#/components/schemas/BatteryMode"
+        batteryType:
+          description: Required when batteryMode is SWAPPABLE; omit for INTEGRATED
+          allOf:
+            - $ref: "#/components/schemas/BatteryType"
+        connectorType:
+          description: Required when batteryMode is INTEGRATED; omit for SWAPPABLE
+          allOf:
+            - $ref: "#/components/schemas/ConnectorType"
+
+    UpdateProfileRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+        batteryMode:
+          $ref: "#/components/schemas/BatteryMode"
+        batteryType:
+          description: Required when batteryMode is SWAPPABLE; omit for INTEGRATED
+          allOf:
+            - $ref: "#/components/schemas/BatteryType"
+        connectorType:
+          description: Required when batteryMode is INTEGRATED; omit for SWAPPABLE
+          allOf:
+            - $ref: "#/components/schemas/ConnectorType"
+      description: |
+        Provide at least one field. When any vehicle field is present, `batteryMode`
+        is required and the mode-driven pair rules apply.
+
+    PublicUser:
+      type: object
+      required:
+        - id
+        - email
+        - displayName
+        - role
+        - status
+        - batteryMode
+        - batteryType
+        - connectorType
+        - voltageClass
+        - currentBatteryId
+        - partnerId
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          example: rider-001
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        role:
+          $ref: "#/components/schemas/UserRole"
+        status:
+          $ref: "#/components/schemas/UserStatus"
+        batteryMode:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/BatteryMode"
+        batteryType:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/BatteryType"
+        connectorType:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ConnectorType"
+        voltageClass:
+          description: Derived from batteryType or connectorType
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/VoltageClass"
+        currentBatteryId:
+          type: string
+          nullable: true
+          description: |
+            Pack currently on the rider's bike (SWAPPABLE only). Assigned at register/seed;
+            updated on swap confirm. Not client-writable via PATCH.
+          example: battery-101
+        partnerId:
+          type: string
+          nullable: true
+          example: null
+
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum:
+            - UNAUTHORIZED
+            - FORBIDDEN
+            - VALIDATION_ERROR
+            - CONFLICT
+            - NOT_FOUND
+            - NO_TELEMETRY
+            - STATION_SERVICE_UNAVAILABLE
+            - INTERNAL_ERROR
+        message:
+          type: string
+
+    EvaluateLastChargeResponse:
+      type: object
+      required: [batteryId, outcome]
+      additionalProperties: false
+      properties:
+        batteryId:
+          type: string
+          example: battery-001
+        outcome:
+          type: string
+          enum: [SAFE, QUARANTINED]
+        reason:
+          type: string
+          enum: [SPIKE, SUSTAINED]
+          description: Present when outcome is QUARANTINED
+        unitId:
+          type: string
+          nullable: true
+          description: SWAP_BAY holding this battery, if found in seed
+
+    LiveChargingSample:
+      type: object
+      required: [time, socPercent, chargingPowerKw, temperature]
+      additionalProperties: false
+      properties:
+        time:
+          type: string
+          format: date-time
+        socPercent:
+          type: number
+          example: 72
+        chargingPowerKw:
+          type: number
+          example: 1.8
+        temperature:
+          type: number
+          example: 31.2
+
+    ChargingProgress:
+      type: object
+      required: [status, startedAt, samples]
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [CHARGING, COMPLETED]
+        startedAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+          description: Present while status is CHARGING
+        endedAt:
+          type: string
+          format: date-time
+          description: Present when status is COMPLETED
+        samples:
+          type: array
+          items:
+            $ref: "#/components/schemas/LiveChargingSample"
+
+    ServiceChargingStatusResponse:
+      type: object
+      required: [service, charging]
+      additionalProperties: false
+      properties:
+        service:
+          $ref: "#/components/schemas/Service"
+        charging:
+          $ref: "#/components/schemas/ChargingProgress"
+
+    UserRole:
+      type: string
+      enum:
+        - RIDER
+        - DELIVERY_RIDER
+        - OPERATOR_ADMIN
+        - SAFETY_INSPECTOR
+        - PARTNER_OPERATOR
+
+    UserStatus:
+      type: string
+      enum: [ACTIVE, SUSPENDED]
+
+    VoltageClass:
+      type: string
+      enum: ["48V", "60V"]
+
+    BatteryMode:
+      type: string
+      enum: [SWAPPABLE, INTEGRATED]
+
+    BatteryType:
+      type: string
+      description: Standardized swappable battery catalog
+      enum: [SL-48, SL-60]
+
+    ConnectorType:
+      type: string
+      description: Standardized integrated-bike charging bay connectors
+      enum: [GB-AC-48, GB-AC-60]
+
+    StationType:
+      type: string
+      enum: [SWAP, CHARGING, HYBRID]
+
+    StationLifecycleState:
+      type: string
+      enum: [ACTIVE, SUSPENDED]
+
+    StationSummary:
+      type: object
+      required:
+        - id
+        - communityId
+        - name
+        - type
+        - lifecycleState
+        - latitude
+        - longitude
+        - address
+        - serviceRadiusMeters
+        - opensAt
+        - closesAt
+        - suspensionReason
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          example: station-001
+        communityId:
+          type: string
+          example: community-001
+        name:
+          type: string
+          example: Haitang Garden East Gate
+        type:
+          $ref: "#/components/schemas/StationType"
+        lifecycleState:
+          $ref: "#/components/schemas/StationLifecycleState"
+        latitude:
+          type: number
+          format: double
+          example: 31.2308
+        longitude:
+          type: number
+          format: double
+          example: 121.4717
+        address:
+          type: string
+        serviceRadiusMeters:
+          type: integer
+          example: 700
+        opensAt:
+          type: string
+          example: "00:00"
+        closesAt:
+          type: string
+          example: "24:00"
+        suspensionReason:
+          type: string
+          nullable: true
+        distanceMeters:
+          type: number
+          description: Present when nearby filtering is applied
+        riderAvailability:
+          description: Present when Authorization bearer token is supplied
+          allOf:
+            - $ref: "#/components/schemas/RiderAvailability"
+
+    StationDetail:
+      allOf:
+        - $ref: "#/components/schemas/StationSummary"
+        - type: object
+          required: [compatibility]
+          additionalProperties: false
+          properties:
+            compatibility:
+              $ref: "#/components/schemas/StationCompatibility"
+            riderAvailability:
+              description: Present when Authorization bearer token is supplied
+              allOf:
+                - $ref: "#/components/schemas/RiderAvailability"
+
+    StationCompatibility:
+      type: object
+      required: [services, batteryTypes, connectorTypes, voltageClasses]
+      additionalProperties: false
+      properties:
+        services:
+          type: array
+          items:
+            type: string
+            enum: [SWAP, BIKE_BAY]
+        batteryTypes:
+          type: array
+          items:
+            $ref: "#/components/schemas/BatteryType"
+        connectorTypes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConnectorType"
+        voltageClasses:
+          type: array
+          items:
+            $ref: "#/components/schemas/VoltageClass"
+
+    RiderAvailability:
+      type: object
+      required: [compatibleReadyBattery, compatibleChargingBay]
+      additionalProperties: false
+      properties:
+        compatibleReadyBattery:
+          type: boolean
+          description: |
+            True when the station is ACTIVE and has a READY SWAP_BAY whose
+            batteryType matches the authenticated SWAPPABLE rider profile.
+        compatibleChargingBay:
+          type: boolean
+          description: |
+            True when the station is ACTIVE and has an AVAILABLE BIKE_BAY whose
+            connectorType matches the authenticated INTEGRATED rider profile.
+
+    CreateServiceRequest:
+      type: object
+      required: [type, stationId]
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          enum: [SWAP, CHARGING]
+        stationId: { type: string, example: station-001 }
+
+    Service:
+      type: object
+      required:
+        - id
+        - type
+        - riderId
+        - stationId
+        - unitId
+        - batteryOutId
+        - batteryInId
+        - state
+        - createdAt
+        - expiresAt
+        - startedAt
+        - completedAt
+        - partnerPriorityApplied
+        - priceYuan
+        - priceCode
+        - timestamp
+      additionalProperties: false
+      properties:
+        id: { type: string, example: service-a1b2c3d4 }
+        type:
+          type: string
+          enum: [SWAP, CHARGING]
+        riderId: { type: string }
+        stationId: { type: string }
+        unitId: { type: string }
+        batteryOutId:
+          type: string
+          nullable: true
+          description: Pack reserved from the bay (going to the rider)
+        batteryInId:
+          type: string
+          nullable: true
+          description: |
+            Pack returned by the rider into the bay. Set on SWAP confirm; null before confirm
+            and for CHARGING services.
+        state:
+          type: string
+          enum:
+            - RESERVED
+            - STARTED
+            - CONFIRMED
+            - CANCELLED
+            - CHARGING
+            - READY_FOR_COLLECTION
+            - COLLECTED
+            - EXPIRED
+            - SAFETY_CUTOFF
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+        partnerPriorityApplied: { type: boolean }
+        priceYuan:
+          type: integer
+          nullable: true
+          description: |
+            Pay-as-you-go amount in whole CNY, snapshotted from `price_list` on confirm/collect.
+            Null until the service finishes.
+          example: 5
+        priceCode:
+          type: string
+          nullable: true
+          description: Catalog code snapshotted with the price (e.g. SWAP_SL-48)
+          example: SWAP_SL-48
+        timestamp: { type: string, format: date-time }
+
+    ActivityResponse:
+      type: object
+      required: [active, recent]
+      additionalProperties: false
+      properties:
+        active:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/Service"
+        recent:
+          type: array
+          items:
+            $ref: "#/components/schemas/Service"
+

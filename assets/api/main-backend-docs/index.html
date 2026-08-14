@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SwapLoop Main Backend API</title>
+    <link rel="stylesheet" href="swagger-ui.css" />
+    <style>
+      body {
+        margin: 0;
+      }
+      .topbar {
+        display: none;
+      }
+
+      /*
+        Stock swagger-ui.css forces:
+          - section.models .model-box:has(.model-box) { width: 100% }
+          - table.model tbody tr td:first-of-type { width: 174px }
+        Together that leaves a large gap between short property names and types.
+      */
+      .swagger-ui section.models .model-container {
+        margin: 0 0 0.65rem;
+      }
+      .swagger-ui .model-box,
+      .swagger-ui section.models .model-box:has(.model-box) {
+        display: inline-block !important;
+        width: auto !important;
+        max-width: 100%;
+        box-sizing: border-box;
+        overflow-x: auto;
+        vertical-align: top;
+      }
+      .swagger-ui table.model {
+        width: max-content !important;
+        max-width: 100%;
+        border-collapse: collapse;
+        table-layout: auto !important;
+      }
+      .swagger-ui table.model tbody tr td:first-of-type {
+        width: auto !important;
+        min-width: 0 !important;
+        white-space: nowrap;
+        padding: 0.2em 0.85em 0.2em 0.35em !important;
+        vertical-align: top;
+      }
+      .swagger-ui table.model tbody tr td:last-of-type {
+        width: auto !important;
+        padding: 0.2em 0.35em !important;
+        vertical-align: top;
+      }
+      .swagger-ui table.model tbody tr td:has(.model-box) {
+        max-width: none !important;
+      }
+      .swagger-ui .inner-object {
+        padding-left: 0.1em;
+      }
+      .swagger-ui .model .prop-type {
+        margin-right: 0.35em;
+      }
+      .swagger-ui .model .prop-enum {
+        display: inline-block;
+      }
+      .swagger-ui .model .prop-enum br {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="swagger-ui-bundle.js"></script>
+    <script src="swagger-ui-standalone-preset.js"></script>
+    <script>
+      SwaggerUIBundle({
+        url: "./openapi.yaml",
+        dom_id: "#swagger-ui",
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIBundle.SwaggerUIStandalonePreset,
+        ],
+        layout: "BaseLayout",
+        defaultModelsExpandDepth: 1,
+        defaultModelExpandDepth: 2,
+        docExpansion: "list",
+        filter: true,
+        tryItOutEnabled: true,
+        persistAuthorization: true,
+      });
+    </script>
+  </body>
+</html>

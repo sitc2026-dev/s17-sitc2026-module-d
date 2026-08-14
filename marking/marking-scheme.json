@@ -1,1 +1,458 @@
-{}
+{
+  "totalMark": 17,
+  "wsosSections": {
+    "1": "Work organization and self-management",
+    "2": "Communication and interpersonal skills",
+    "3": "Design Implementation",
+    "4": "Front-End Development",
+    "5": "Back-End Development"
+  },
+  "subCriterions": [
+    {
+      "name": "Authentication and session",
+      "aspects": [
+        {
+          "type": "measurement",
+          "description": "Login with email and password stores the token and opens the authenticated app",
+          "maxMark": 0.5,
+          "wsosSection": 4,
+          "extraDescription": "Test: Sign in with a seed rider (for example lin.xiaoyu@swaploop.test / password123) or an account created in this session. On success the SPA leaves the login screen and shows authenticated chrome (bottom nav). Fail if credentials are ignored or the app stays on login after a 200 login response.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Protected API calls send Authorization: Bearer with the stored token",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: After login, a protected call such as GET /api/v1/me or GET /api/v1/stations includes Authorization: Bearer <token> (Network).",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "The stored token keeps the rider signed in after reload",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: After login, confirm the opaque token is in localStorage (or equivalent). Reload the app. The rider stays signed in and protected calls still send the Bearer header.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Sign out clears the stored token and returns to login",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: From Profile, sign out. The token is removed from storage, the login (or registration) screen is shown, and a protected URL no longer loads authenticated content without signing in again.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Unauthenticated visitors can reach only login and registration",
+          "maxMark": 0.5,
+          "wsosSection": 4,
+          "extraDescription": "Test: With no token (private window or after sign-out), only login and the two-step registration are available. Direct URLs for the station list, a station detail hub, Scan, and Activity do not show those views. Fail if the SPA calls GET /stations and renders the public list before login.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "A suspended account rejected with 403 shows the rider-facing message",
+          "maxMark": 0.25,
+          "wsosSection": 2,
+          "extraDescription": "Test: Sign in as sun.hao@swaploop.test / password123 (seeded SUSPENDED). Login returns 403. The SPA stays on login, shows that message, and does not store a token. Fail if the app looks signed-in, shows a blank screen, or only a generic browser error.",
+          "calculation": { "type": "pass-or-fail" }
+        }
+      ]
+    },
+    {
+      "name": "Registration and profile",
+      "aspects": [
+        {
+          "type": "measurement",
+          "description": "Registration step 1 collects email, password, display name, and a vehicle profile",
+          "maxMark": 0.5,
+          "wsosSection": 4,
+          "extraDescription": "Test: Open registration. Step 1 requires email, password, display name, and battery mode (SWAPPABLE or INTEGRATED) before the Alipay step. Fail if the SPA skips the vehicle profile or registers with credentials only.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Vehicle fields follow battery mode and voltageClass is not sent on register",
+          "maxMark": 0.5,
+          "wsosSection": 4,
+          "extraDescription": "Test: For SWAPPABLE, batteryType is required (SL-48 or SL-60) and connectorType is omitted. For INTEGRATED, connectorType is required (GB-AC-48 or GB-AC-60) and batteryType is omitted. In Network, POST /api/v1/auth/register does not send voltageClass (the main backend derives it).",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Registration step 2 is a simulated Alipay link, then Create account",
+          "maxMark": 0.5,
+          "wsosSection": 4,
+          "extraDescription": "Test: After step 1, a mock Alipay QR or linking UI appears, waits a short delay, then shows success and enables Create account. Create account registers, stores the returned token, and enters the authenticated app. In Network, no live Alipay or payment API is called.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Profile shows the rider’s identity, status, and vehicle fields from the API",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: Open Profile after login. It shows display name, email, role, status, battery mode, battery type or connector type (whichever applies), and the derived voltage class. For a swappable rider who currently holds a pack, currentBatteryId is shown when the API returns it.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Rider can edit display name and vehicle profile with the same mode-driven field rules",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: Change display name and the vehicle profile. SWAPPABLE still uses batteryType without connectorType; INTEGRATED uses connectorType without batteryType. Reload Profile: the PATCH /api/v1/me result is shown.",
+          "calculation": { "type": "pass-or-fail" }
+        }
+      ]
+    },
+    {
+      "name": "Stations list and filters",
+      "aspects": [
+        {
+          "type": "measurement",
+          "description": "Authenticated station list shows name, type, lifecycle status, and address or hours",
+          "maxMark": 0.5,
+          "wsosSection": 4,
+          "extraDescription": "Test: While signed in, open Stations. A scrollable list loads from GET /api/v1/stations. Each card shows name, type (SWAP, CHARGING, or HYBRID), lifecycle status, and address or hours when the API provides them. Opening a card goes to that station’s detail hub.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Each station card shows whether a compatible pack or bay is ready for this rider",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: With a SWAPPABLE rider, cards distinguish a ready battery for that batteryType from a station that merely exists. With an INTEGRATED rider, cards distinguish a ready charging bay for that connectorType. Fail if every station looks equally usable regardless of profile.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "List can be filtered by station type: all, SWAP, CHARGING, or HYBRID",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: Apply each type filter. GET /stations uses type=SWAP, CHARGING, or HYBRID (omit type for all). The list shows only matching stations. Fail if the filter does not change the list or mixes types.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Compatible-availability filter keeps stations with a ready pack or bay for the signed-in profile",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: Turn on the compatible-availability filter. GET /stations uses service=SWAP and batteryType for a swappable rider, or service=BIKE_BAY and connectorType for an integrated rider. Stations without a ready pack or bay drop out. Fail if closed/empty stations still appear as if they were ready.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Nearby filter uses Geolocation with about 1.5 km radius and shows distance",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: In Chrome DevTools Sensors, set location to Shanghai (for example 31.2304, 121.4737). Enable nearby. GET /stations is called with lat, lng, and radiusMeters (default 1500). Stations outside that radius are excluded and remaining cards show distanceMeters. Fail if nearby is only a client-side guess without those query params, or does not use Geolocation.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Empty filtered lists distinguish nothing compatible ready from no station nearby",
+          "maxMark": 0.25,
+          "wsosSection": 2,
+          "extraDescription": "Test: Compatible-availability on with nothing ready, and nearby with a location far from Shanghai, must not share one generic “no results” message. Closed or suspended stations that still appear in an unfiltered list are identifiable from lifecycle status on the card (not as a third empty-list type). Fail if both empty filters look identical.",
+          "calculation": { "type": "pass-or-fail" }
+        }
+      ]
+    },
+    {
+      "name": "Station detail and reserve",
+      "aspects": [
+        {
+          "type": "measurement",
+          "description": "Station hub shows identity, status, hours, compatibility, and rider availability",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: Open an ACTIVE station. The hub shows identity, address, status, hours, compatibility (services, battery types, connector types, voltage classes as returned), and whether a compatible battery or charging bay is ready for the signed-in rider, plus short guidance for that profile.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Eligible ACTIVE station offers Reserve battery or Reserve charging bay and creates a hold",
+          "maxMark": 0.5,
+          "wsosSection": 4,
+          "extraDescription": "Test: As a SWAPPABLE rider on an eligible ACTIVE station, Reserve battery creates a SWAP service. As an INTEGRATED rider, Reserve charging bay creates a CHARGING service. Network: POST /api/v1/services. On success the hub shows the active hold (expiresAt from the API, 10 seconds in the competition API) and a clear path to Activity.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Active service at this station is shown and reserve is not replaced by a misleading no-ready chip",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: After a successful hold at this station, the hub shows that hold or in-progress state and a primary control to open Activity. It must not show a misleading “No ready battery / bay” chip while the hold is still theirs.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Active service at another station blocks a new reserve and links to Activity",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: With an active hold at station A, open station B. A new reserve is blocked. Copy explains the rider already has an active service and links to Activity. Fail if a second hold can be started or the rider is given no path to Activity.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Last-charge 409 shows rider copy, reloads availability, and does not silently change station",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: As lin.xiaoyu@swaploop.test, reserve SWAP at station-005 (battery-007 sustained-heat fixture). Expect 409. Show rider-facing copy such as “The selected battery is not available anymore”. Reload this station so availability is current; hide or disable reserve when nothing compatible remains. Fail if the SPA re-implements heat rules, invents availability, or silently sends the rider to another station. Do not use station-002 for this test (it has another READY SL-48 pack).",
+          "calculation": { "type": "pass-or-fail" }
+        }
+      ]
+    },
+    {
+      "name": "Station QR scan",
+      "aspects": [
+        {
+          "type": "measurement",
+          "description": "Scan screen embeds the QR emulator web component and does not use a device camera",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: Open Scan. The IIFE bundle from assets/qr-code-emulator/swaploop-qr-emulator.js is loaded and <swaploop-qr-emulator> is on the page (see assets/handouts/handout-qr-emulator-integration.md). No getUserMedia / camera permission is required.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "The SPA does not call Station Service except through the QR emulator",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: During station list, reserve, Activity swap, and charging poll, Network shows no Station Service calls for last-charge telemetry or bike-bay sessions. Station Service appears only as the emulator’s GET /api/qr/current (service-url https://cXX-YYYY-station-service.sitc.skillsit.eu or http://localhost:4020).",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "A valid station poster payload opens that station’s detail hub",
+          "maxMark": 0.5,
+          "wsosSection": 4,
+          "extraDescription": "Test: On the Station Service QR tester (https://cXX-YYYY-station-service.sitc.skillsit.eu/qr-code-emulator or http://localhost:4020/qr-code-emulator), set a known station poster, then trigger a scan in the SPA. Accept https://app.swaploop.test/stations/{stationId} and a bare station-… id. The SPA opens that station’s detail hub only after the main backend returns the station. Fail if the hub is invented from the QR string alone without a successful station fetch.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "An invalid QR payload shows a mismatch message and does not invent a station",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: Feed a payload that is not the station deep link and not a bare station- id. Show a clear mismatch message and do not open a fake hub. (Unknown but well-formed ids are marked with the 404 error aspect after GET /stations/{id} fails.)",
+          "calculation": { "type": "pass-or-fail" }
+        }
+      ]
+    },
+    {
+      "name": "Activity — swap journey",
+      "aspects": [
+        {
+          "type": "measurement",
+          "description": "Active swap hold shows an expiresAt countdown with Start swapping and Cancel",
+          "maxMark": 0.5,
+          "wsosSection": 4,
+          "extraDescription": "Test: Reserve a SWAP service as lin.xiaoyu@swaploop.test and open Activity immediately (GET /api/v1/me/activity). Holds last 10 seconds — start before expiry or reset the seed. While RESERVED, show a countdown from expiresAt and offer Start swapping and Cancel. Display the API timestamp/offset as returned. The physical handoff does not require another QR scan.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "After start, the swap offers Confirm swap and Cancel",
+          "maxMark": 0.5,
+          "wsosSection": 4,
+          "extraDescription": "Test: Choose Start swapping (POST /api/v1/services/{id}/start). When status is STARTED, offer Confirm swap and Cancel. Confirm calls POST /api/v1/services/{id}/confirm. Fail if start is skipped or confirm is offered while still RESERVED.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "After confirm or collect, the receipt uses priceYuan / priceCode in CNY and is not calculated in the SPA",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: After a successful swap confirm (or charging collect), show a receipt from the API priceYuan / priceCode in CNY. Fail if the SPA calculates, guesses, or placeholders an amount.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Recent finished services can reopen receipt fields; empty Activity links to Stations",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: After a priced service, the recent list includes it and those receipt fields can be reopened. With no active and no recent items (new account or empty history), say so clearly and link back to Stations.",
+          "calculation": { "type": "pass-or-fail" }
+        }
+      ]
+    },
+    {
+      "name": "Activity — charging journey",
+      "aspects": [
+        {
+          "type": "measurement",
+          "description": "Active charging hold shows a countdown with Start charging and Cancel only while RESERVED",
+          "maxMark": 0.5,
+          "wsosSection": 4,
+          "extraDescription": "Test: As chen.wei@swaploop.test, reserve a charging bay and open Activity immediately (10-second hold). While RESERVED, show an expiresAt countdown, Start charging, and Cancel. After the session has started, Cancel is not offered (cancel only in RESERVED).",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Started charging polls live status about once per second and shows SOC, power, temperature, and endsAt",
+          "maxMark": 0.5,
+          "wsosSection": 4,
+          "extraDescription": "Test: Start charging as chen.wei@swaploop.test (POST /api/v1/services/{id}/start). In Network, GET /api/v1/services/{id}/charging-status runs about once per second. The UI shows SOC, power, temperature, and any endsAt countdown from the API. The competition simulation lasts about 15 seconds. Fail if the SPA never polls, polls far slower than ~1 s, or invents telemetry the API did not return.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Polling stops at ready-for-collection; Collect bike is offered; no Mark ready control",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: When the main backend reports the session complete / READY_FOR_COLLECTION, polling stops and Collect bike is offered (POST /api/v1/services/{id}/collect). There is no Mark ready control on the happy path. Receipt after collect is marked with the swap receipt aspect. SAFETY_CUTOFF copy is marked under rider-facing messages.",
+          "calculation": { "type": "pass-or-fail" }
+        }
+      ]
+    },
+    {
+      "name": "Client state and API errors",
+      "aspects": [
+        {
+          "type": "measurement",
+          "description": "Common API errors 401, 403, 404, 409, 422, and 5xx show actionable rider-facing messages",
+          "maxMark": 0.5,
+          "wsosSection": 2,
+          "extraDescription": "Test: Produce 401 (clear token then call a protected route), 403 (sun.hao login), 404 (unknown station id or forged QR hub), 409 (swap reserve at station-005), 422 (invalid register/PATCH body), and 5xx (if the assessor can simulate it, otherwise a forced Network failure to a protected URL). Each shows an on-screen, actionable message with no stack traces. Unknown station ids must not look like a valid hub.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "401 on a protected rider action clears the session and returns to login",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: After login as lin.xiaoyu@swaploop.test, remove or expire the token, then trigger a protected action. The SPA clears storage and returns to login. A 403 on a later protected call (account suspended) must also clear session and return to login. Login 403 for sun.hao stays on the login screen and is marked separately.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Mutations cannot be double-submitted while a request is pending",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: On Reserve, Start, Confirm, Collect, or Cancel, activate the control twice quickly (or hold Enter). Only one mutation is sent, or the second is ignored while pending (Network). Fail if two identical POSTs are fired.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Loading or stale indicators are shown instead of presenting cached availability as current",
+          "maxMark": 0.25,
+          "wsosSection": 4,
+          "extraDescription": "Test: Open Stations or a station hub, then change a filter or reopen the hub. While GET /stations or GET /stations/{id} is in flight, a loading or stale indicator is visible. Fail if a previous list is shown as if it were the current result with no cue that data is refreshing.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "judgement",
+          "description": "Rider-facing copy for expiry, service-state changes, and API failures is clear and accessible",
+          "maxMark": 0.5,
+          "wsosSection": 2,
+          "judgementScoreDescription": [
+            "Hold expiry, major service-state changes, and API errors are missing, shown only as a colour shift, or leak stack traces / internal codes.",
+            "Some failures have a message, but copy is generic, easy to miss, or does not tell the rider what happened (for example SAFETY_CUTOFF or hold expiry).",
+            "Most expiry, state-change, and HTTP errors have a clear on-screen message in rider language, paired with text or icons rather than colour alone.",
+            "Expiry, state changes, SAFETY_CUTOFF, and HTTP errors are consistently explained with specific, actionable copy and remain understandable without relying on colour."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SPA structure and routing",
+      "aspects": [
+        {
+          "type": "measurement",
+          "description": "Independently runnable JavaScript SPA with client-side routing",
+          "maxMark": 0.5,
+          "wsosSection": 1,
+          "extraDescription": "Test: Start the submission as a SPA (modern framework such as React, Vue, or Angular) in Google Chrome. Navigating Stations, Scan, Activity, and Profile does not trigger a full document reload. The app consumes the Main Backend under /api/v1 (https://cXX-YYYY-module-c.sitc.skillsit.eu/api/v1 or http://localhost:5000/api/v1).",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Reloading a deep-linked URL restores the same view after auth is read from storage",
+          "maxMark": 0.5,
+          "wsosSection": 4,
+          "extraDescription": "Test: While signed in, open a station detail URL (or Activity / Profile / Scan). Reload. After auth is read from storage, the same view is restored. Unsaved form input may be lost. Fail if reload always dumps the rider on a blank home/login despite a valid stored token.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "judgement",
+          "description": "Code organization and maintainability of the rider SPA",
+          "maxMark": 0.5,
+          "wsosSection": 1,
+          "judgementScoreDescription": [
+            "Code is unstructured, heavily duplicated, or difficult to follow; routing, API calls, and UI are mixed without clear boundaries.",
+            "Basic framework modules exist but naming, folders, and API/state handling are inconsistent.",
+            "Clear file/module structure with meaningful names and a sensible split between views, API access, and client state.",
+            "Modular, consistent patterns: reusable views/components, server state kept separate from transient UI state, and code that is easy to extend."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Design, UX, and accessibility",
+      "aspects": [
+        {
+          "type": "measurement",
+          "description": "Signed-in chrome is a sticky bottom bar with Stations, Scan, Activity, and Profile",
+          "maxMark": 0.25,
+          "wsosSection": 3,
+          "extraDescription": "Test: Once signed in, a navigation bar stays at the bottom of the viewport on Stations, Scan, Activity, and Profile while main content scrolls. Labels and/or icons include at least Stations, Scan, Activity, and Profile.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "The current bottom-nav destination is distinct and switching does not fully reload the page",
+          "maxMark": 0.25,
+          "wsosSection": 3,
+          "extraDescription": "Test: Tap each destination. The current item is visually distinct. The view switches without a full page reload (SPA navigation).",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Login and registration have no bottom bar; authenticated actions are not hidden behind it",
+          "maxMark": 0.25,
+          "wsosSection": 3,
+          "extraDescription": "Test: Login and the two-step registration do not show the sticky bottom bar. On Stations and Activity, cards, reserve, and service actions have enough bottom padding that they are not hidden behind the bar.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Layout is mobile-first, remains usable at desktop width, and does not rely on hover-only actions",
+          "maxMark": 0.5,
+          "wsosSection": 3,
+          "extraDescription": "Test: At a phone-sized viewport the UI is a single column with large enough tap targets. Stretch the window to a desktop width: the layout still works. Reserve and Activity actions are usable with tap/click — not hover-only.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Reserve, start, confirm, collect, and cancel are keyboard-operable with a visible focus state",
+          "maxMark": 0.5,
+          "wsosSection": 3,
+          "extraDescription": "Test: Using only Tab and Enter/Space (no pointer), complete a service journey far enough to operate reserve, start, confirm or collect, and cancel. Each of those controls is reachable and has a visible focus state.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "measurement",
+          "description": "Status is not communicated by colour alone",
+          "maxMark": 0.25,
+          "wsosSection": 3,
+          "extraDescription": "Test: Closed/suspended stations, an expiring hold, and a failed request are each understandable from text and/or icons as well as colour. Fail if the only difference is a red/green (or similar) colour shift.",
+          "calculation": { "type": "pass-or-fail" }
+        },
+        {
+          "type": "judgement",
+          "description": "Visual design quality of the mobile-first rider app",
+          "maxMark": 0.5,
+          "wsosSection": 3,
+          "judgementScoreDescription": [
+            "Looks like an unfinished desktop page: inconsistent spacing, unreadable type, or chrome that does not feel like a rider app.",
+            "Usable but generic: basic layout with weak hierarchy, cramped tap targets, or inconsistent station/activity cards.",
+            "Coherent mobile-first rider UI with clear hierarchy, consistent cards and actions, and chrome that reads as an app rather than a website menu.",
+            "Polished, consistent visual system: strong hierarchy, comfortable tap targets, clear station/activity states, SwapLoop Station / cabinet / bay vocabulary used consistently, and a native-feeling bottom-nav app."
+          ]
+        }
+      ]
+    }
+  ]
+}
