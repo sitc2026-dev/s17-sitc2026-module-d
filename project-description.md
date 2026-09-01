@@ -31,15 +31,47 @@ High-level capabilities (details in [Requirements](#requirements)):
 - Embed the competition **QR emulator** from [`assets/qr-code-emulator/`](./assets/qr-code-emulator/). Integration steps are in [Station QR scan](#station-qr-scan) and [`assets/handouts/handout-qr-emulator-integration.md`](./assets/handouts/handout-qr-emulator-integration.md).
 - Prefer native `fetch` (or the framework’s HTTP client). Display only prices, quarantine outcomes, and availability the Main Backend returned.
 
+### Setup
+
+The Main Backend (a reference Module C solution), the Station Service, a MySQL instance seeded with [`assets/db/swaploop_db.sql`](./assets/db/swaploop_db.sql), and phpMyAdmin are all provided as a Docker Compose stack under [`assets/main-backend-station-service`](./assets/main-backend-station-service). Start it before working on the SPA:
+
+```bash
+cd assets/main-backend-station-service
+cp .env.example .env
+docker compose up -d
+```
+
+With the default `.env` values the stack is reachable at:
+
+| Service | Host URL |
+| --- | --- |
+| Main Backend | `http://localhost:5000` (API under `/api/v1`) |
+| Station Service | `http://localhost:4020` |
+| MySQL | `localhost:3306` (user `root`, password `toor`, database `swaploop_db`) |
+| phpMyAdmin | `http://localhost:8082` |
+
+All values in `docker-compose.yaml` come from `.env` (there are no compose defaults), so edit `.env` if any of these ports collide on your machine, and point the SPA's API base URL at the Main Backend accordingly.
+
+MySQL loads the seed dump on first start. Useful commands:
+
+```bash
+docker compose ps                       # check the stack
+docker compose logs -f main-backend     # follow Main Backend logs
+docker compose down                     # stop the stack
+docker compose down -v && docker compose up -d  # wipe the volume and re-seed
+```
+
+To reset the seed between marking aspects (for example after a 10-second hold has expired), call `POST http://localhost:4020/reset` on the Station Service. No authentication is required.
+
 ### Hosts, seed accounts, and fixtures
 
-Replace `cXX` / `YYYY` with the competition username and PIN. Local URLs are for development.
+The Main Backend and Station Service both run locally from the provided Docker Compose stack (see [Setup](#setup)):
 
-| Service                                          | Assessment                                                           | Local                                    |
-| ------------------------------------------------ | -------------------------------------------------------------------- | ---------------------------------------- |
-| Main Backend (`/api/v1`)                         | `https://cXX-YYYY-module-c.sitc.skillsit.eu/api/v1`                  | typically `http://localhost:5000/api/v1` |
-| Station Service (QR emulator `service-url` only) | `https://cXX-YYYY-station-service.sitc.skillsit.eu`                  | `http://localhost:4020`                  |
-| QR tester (choose the active poster)             | `https://cXX-YYYY-station-service.sitc.skillsit.eu/qr-code-emulator` | `http://localhost:4020/qr-code-emulator` |
+| Service                                          | URL                                      |
+| ------------------------------------------------ | ---------------------------------------- |
+| Main Backend (`/api/v1`)                         | `http://localhost:5000/api/v1`           |
+| Station Service (QR emulator `service-url` only) | `http://localhost:4020`                  |
+| QR tester (choose the active poster)             | `http://localhost:4020/qr-code-emulator` |
 
 The SPA must not call Station Service except through `<swaploop-qr-emulator>`. Last-charge telemetry and live charging sessions are proxied by the Main Backend.
 
@@ -169,7 +201,7 @@ Give riders a **Scan** screen that embeds the provided `<swaploop-qr-emulator>` 
 
 How to load the IIFE bundle, set `service-url`, start a scan by changing `scan-request-id`, and read `event.detail.payload` from the `qr-scan` event is documented in [`assets/handouts/handout-qr-emulator-integration.md`](./assets/handouts/handout-qr-emulator-integration.md), including React, Vue, and Angular examples. The script is [`assets/qr-code-emulator/swaploop-qr-emulator.js`](./assets/qr-code-emulator/swaploop-qr-emulator.js).
 
-A **QR tester** is also provided so you can choose and check the active poster code without a camera. Open it at `https://cXX-YYYY-station-service.sitc.skillsit.eu/qr-code-emulator` (replace `cXX` / `YYYY` with your workstation host; local Station Service: `http://localhost:4020/qr-code-emulator`). Use it to set which station QR the emulator will return, then trigger a scan in the SPA.
+A **QR tester** is also provided so you can choose and check the active poster code without a camera. Open it at `http://localhost:4020/qr-code-emulator`. Use it to set which station QR the emulator will return, then trigger a scan in the SPA.
 
 Every station poster encodes the same kind of deep link:
 
